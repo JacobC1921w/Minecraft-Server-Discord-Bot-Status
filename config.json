@@ -1,4 +1,7 @@
 {
     "TOKEN": "",
-    "DISPLAYNAME": "Server status"
+    "DISPLAYNAME": "Server status",
+    "PROCESSQUERY": "/usr/lib/jvm/",
+    "UPDATEINTERVAL": 5000,
+    "MCSERVERADDRESS": ""
 }

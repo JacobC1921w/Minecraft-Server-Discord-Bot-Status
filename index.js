@@ -1,14 +1,15 @@
 const { Client, Events, GatewayIntentBits } = require("discord.js");
-const psList = require("ps-list").default;
+const fs = require("fs").promises;
 
 require("dotenv").config({ path: "./config.env" });
 const config = require("./config.json");
 
 const token = process.env.TOKEN !== undefined ? process.env.TOKEN : config.TOKEN;
+const serverAddress = process.env.MCSERVERADDRESS !== undefined ? process.env.MCSERVERADDRESS : config.MCSERVERADDRESS;
 
 const discordClient = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-discordClient.once(Events.ClientReady, (readyClient) => {
+discordClient.once(Events.ClientReady, async (readyClient) => {
 	console.log(`Ready! Logged in as ${readyClient.user.tag}`);
     console.log(`Invite me with: https://discord.com/api/oauth2/authorize?client_id=${readyClient.user.id}&permissions=0&scope=bot%20applications.commands`)
     console.log(`Currently running on ${readyClient.guilds.cache.size} ${readyClient.guilds.cache.size == 1 ? "server" : "servers"}`);
@@ -16,35 +17,58 @@ discordClient.once(Events.ClientReady, (readyClient) => {
     readyClient.user.displayName = config.DISPLAYNAME;
     console.log(`Display name set to: ${config.DISPLAYNAME}`);
 
-    getServerStatus()
+    let oldServerStatus = await getServerStatus();
+    
+    await updateStatus(readyClient, oldServerStatus[0], oldServerStatus[1]);
+    
+    checkStatusLoop(readyClient, oldServerStatus);
 });
 
 async function getServerStatus() {
+    const { default: psList } = await import("ps-list");
     const processes = await psList();
 
-    // 1. Define the search string for the Minecraft server process
-    const searchString = 'screen /usr/lib/jvm/';
-
-    // 2. Use the Array.prototype.find() method to locate the first matching process
-    const minecraftProcess = processes.find(process => {
-        // Check if the process's command line string exists and starts with the search string
-        return process.cmd && process.cmd.startsWith(searchString);
-    });
-
-    // 3. Log the result
-    if (minecraftProcess) {
-        console.log("Minecraft Server Process Found:");
-        console.log({
-            pid: minecraftProcess.pid,
-            name: minecraftProcess.name,
-            cmd: minecraftProcess.cmd
-        });
-        // Now you can update your Discord status based on the process being found!
-        // readyClient.user.setActivity('Online', { type: ActivityType.Playing }); 
-    } else {
-        console.log("Minecraft Server Process NOT Found.");
-        // readyClient.user.setActivity('Offline', { type: ActivityType.Watching });
+    for (const process of processes) {
+        if (process.cmd && process.cmd.startsWith(config.PROCESSQUERY) && (process.cmd.includes("forge") || process.cmd.includes("server.jar"))) {
+            try {
+                const destination = await fs.readlink(`/proc/${process.pid}/cwd`);
+                const fileContents = await fs.readFile(`${destination}/logs/latest.log`, "utf-8");
+                
+                if (fileContents.includes("For help")) {
+                    return [true, destination.split('/').at(-1)];
+                }
+                
+            } catch (error) {
+                continue; 
+            }
+        }
     }
+
+    return [false, ""];
+}
+
+async function updateStatus(client, isOnline, prescence) {
+    const status = isOnline ? "online" : "dnd";
+    const statusText = isOnline ? "Online" : "Offline";
+    const description = prescence.split(' ').slice(0, -1).join(' ');
+    const version = prescence.split(' ').at(-1);
+    
+    client.user.setPresence({ activities: [{ name: (status != "dnd" ? `DESC: ${description} | V: ${version} | IP: ${serverAddress}` : "") }], status: status })
+    console.log(`Minecraft server status: ${statusText}`);
+}
+
+function checkStatusLoop(readyClient, oldServerStatus) {
+    setTimeout(async () => {
+        const currentServerStatus = await getServerStatus();
+
+        if (currentServerStatus[0] !== oldServerStatus[0]) {
+            await updateStatus(readyClient, currentServerStatus[0], currentServerStatus[1]);
+            oldServerStatus = currentServerStatus;
+        }
+        
+        checkStatusLoop(readyClient, oldServerStatus); 
+        
+    }, config.UPDATEINTERVAL);
 }
 
 discordClient.login(token);
