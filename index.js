@@ -10,7 +10,7 @@ const serverAddress = process.env.MCSERVERADDRESS !== undefined ? process.env.MC
 const discordClient = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 discordClient.once(Events.ClientReady, async (readyClient) => {
-	console.log(`Ready! Logged in as ${readyClient.user.tag}`);
+    console.log(`Ready! Logged in as ${readyClient.user.tag}`);
     console.log(`Invite me with: https://discord.com/api/oauth2/authorize?client_id=${readyClient.user.id}&permissions=0&scope=bot%20applications.commands`)
     console.log(`Currently running on ${readyClient.guilds.cache.size} ${readyClient.guilds.cache.size == 1 ? "server" : "servers"}`);
 
@@ -53,7 +53,7 @@ async function updateStatus(client, isOnline, prescence) {
     const description = prescence.split(' ').slice(0, -1).join(' ');
     const version = prescence.split(' ').at(-1);
     
-    client.user.setPresence({ activities: [{ name: (status != "dnd" ? `DESC: ${description} | V: ${version} | IP: ${serverAddress}` : "") }], status: status })
+    client.user.setPresence({ activities: [{ name: (status != "dnd" ? `${description} (${version}) | IP: ${serverAddress}` : "") }], status: status })
     console.log(`Minecraft server status: ${statusText}`);
 }
 
